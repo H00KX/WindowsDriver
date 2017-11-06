@@ -1,0 +1,23 @@
+;版本区域
+[Version]
+Signature="$CHICAGO$"
+Provider=Zhangfan_Device
+DriverVer=11/06/2017,11.12.36.579
+
+; If device fits one of the standard classes, use the name and GUID here,
+; otherwise create your own device class and GUID as this example shows.
+
+Class=ZhangfanDevice
+ClassGUID={EF2962F0-0D55-4bff-B8AA-2221EE8A79B0}
+
+;--------- 安装磁盘节 -----------------------
+
+; These sections identify source disks and files for installation. They are
+; shown here as an example, but commented out.
+
+[SourceDisksNames]
+1 = "HelloWDM",Disk1,,
+
+[SourceDisksFiles]
+HelloWDM.sys = 1,MyDriver_Check,
+

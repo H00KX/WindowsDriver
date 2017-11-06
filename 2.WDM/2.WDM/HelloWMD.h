@@ -2,8 +2,10 @@
 extern "C"
 {
 #endif
+
 #include <wdm.h>
-#ifdef __cplushplush
+
+#ifdef __cplusplus
 }
 #endif
 
