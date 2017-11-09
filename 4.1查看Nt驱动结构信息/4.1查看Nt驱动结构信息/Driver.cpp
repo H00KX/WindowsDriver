@@ -1,6 +1,6 @@
 #include "Driver.h"
 
-#pragma INITCODE
+
 void Dump(IN PDRIVER_OBJECT pDriverObject)
 {
 	KdPrint(("-------------------------------------------------------------\n"));
@@ -24,7 +24,7 @@ void Dump(IN PDRIVER_OBJECT pDriverObject)
 	KdPrint(("--------------------------------------------------------------------\n"));
 }
 
-#pragma PAGEDCODE
+
 NTSTATUS  CreateDevice(IN PDRIVER_OBJECT pDriverObject)
 {
 	NTSTATUS  status;
@@ -82,7 +82,7 @@ NTSTATUS  CreateDevice(IN PDRIVER_OBJECT pDriverObject)
 	return STATUS_SUCCESS;
 }
 
-#pragma PAGEDCODE
+
 NTSTATUS CreateDevice2(
 	IN PDRIVER_OBJECT	pDriverObject
 )
@@ -127,12 +127,12 @@ NTSTATUS CreateDevice2(
 	UNICODE_STRING symLinkName;
 	RtlInitUnicodeString(&symLinkName, L"\\??\\HelloDDK2");
 
-	//pDevExt->ustrSymLinkName = symLinkName;
-	pDevExt->ustrSymLinkName.Buffer = (PWCH)ExAllocatePoolWithTag(PagedPool, 260 * sizeof(WCHAR), 'POC');
+	pDevExt->ustrSymLinkName = symLinkName;   //UnicodeString中的Buffer只是一个指针，这样赋值只是指向堆栈的一个指针。。卸载时会蓝屏
+	/*pDevExt->ustrSymLinkName.Buffer = (PWCH)ExAllocatePoolWithTag(PagedPool, 260 * sizeof(WCHAR), 'POC');
 	RtlZeroMemory(pDevExt->ustrSymLinkName.Buffer, 260 * sizeof(WCHAR));
 	RtlCopyMemory(pDevExt->ustrSymLinkName.Buffer, symLinkName.Buffer, symLinkName.Length);
 	pDevExt->ustrSymLinkName.Length = symLinkName.Length;
-	pDevExt->ustrSymLinkName.MaximumLength = 260 * sizeof(WCHAR);
+	pDevExt->ustrSymLinkName.MaximumLength = 260 * sizeof(WCHAR);*/
 
 
 
@@ -145,28 +145,30 @@ NTSTATUS CreateDevice2(
 	return STATUS_SUCCESS;
 }
 
-#pragma INITCODE
+
 VOID HelloDDKUnload(IN PDRIVER_OBJECT pDriverObject)
 {
-	//PDEVICE_OBJECT	pNextObj;
-	//KdPrint(("Enter DriverUnload\n"));
-	//pNextObj = pDriverObject->DeviceObject;
-	//while (pNextObj != NULL)
-	//{
-	//	PDEVICE_EXTENSION pDevExt = (PDEVICE_EXTENSION)pNextObj->DeviceExtension;
+	PDEVICE_OBJECT	pNextObj;
+	KdPrint(("Enter DriverUnload\n"));
+	pNextObj = pDriverObject->DeviceObject;
+	int i = 0;
+	while (pNextObj != NULL)
+	{
+		++i;
+		PDEVICE_EXTENSION pDevExt = (PDEVICE_EXTENSION)pNextObj->DeviceExtension;
+		KdPrint(("Delete %d device\n", i));
+		//删除符号链接
+		UNICODE_STRING pLinkName = pDevExt->ustrSymLinkName;
+		IoDeleteSymbolicLink(&pLinkName);
+		pNextObj = pNextObj->NextDevice;
+		IoDeleteDevice(pDevExt->pDevice);
 
-	//	//删除符号链接
-	//	UNICODE_STRING pLinkName = pDevExt->ustrSymLinkName;
-	//	IoDeleteSymbolicLink(&pLinkName);
-	//	pNextObj = pNextObj->NextDevice;
-	//	IoDeleteDevice(pDevExt->pDevice);
-
-	//	ExFreePool(pDevExt->ustrDeviceName.Buffer);
-	//	ExFreePool(pDevExt->ustrSymLinkName.Buffer);
-	//}
+		ExFreePool(pDevExt->ustrDeviceName.Buffer);
+		ExFreePool(pDevExt->ustrSymLinkName.Buffer);
+	}
 }
 
-#pragma PAGEDCODE
+
 NTSTATUS HelloDDKDispatchRoutine(IN PDEVICE_OBJECT pDeviceObject, IN PIRP pIrp)
 {
 	KdPrint(("Enter HelloDDKDispatchRoutine\n"));
@@ -180,7 +182,7 @@ NTSTATUS HelloDDKDispatchRoutine(IN PDEVICE_OBJECT pDeviceObject, IN PIRP pIrp)
 	return status;
 }
 
-#pragma INITCODE
+
 extern "C" NTSTATUS DriverEntry(PDRIVER_OBJECT pDriverObject, PUNICODE_STRING pRegistryPath)
 {
 	NTSTATUS status;

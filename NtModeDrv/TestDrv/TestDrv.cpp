@@ -221,7 +221,7 @@ void TestDriver()
 	//²âÊÔÇý¶¯³ÌÐò
 	HANDLE hDevice = CreateFile("\\\\.\\ntmodeldrv",
 		GENERIC_WRITE | GENERIC_READ,
-		8,
+		0,
 		NULL,
 		OPEN_EXISTING,
 		FILE_ATTRIBUTE_NORMAL,
@@ -253,15 +253,17 @@ void TestDriver()
 
 	WCHAR bufFileInput[1024] = L"C:\\docs\\hi.txt";
 
+	WCHAR szprint[] = L"Hello Im Bx";
 	DeviceIoControl(
 		hDevice,
 		CTL_PRINT,
-		bufWrite,
-		sizeof(bufWrite),
+		szprint,
+		sizeof(szprint),
 		bufOutput,
 		sizeof(bufOutput),
 		&dwRet,
 		NULL);
+	printf("DeviceIoControl Print Returned Num:%d\n", dwRet);
 	DeviceIoControl(
 		hDevice,
 		CTL_HELLO,

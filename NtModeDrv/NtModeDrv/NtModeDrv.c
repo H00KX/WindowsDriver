@@ -134,7 +134,7 @@ NTSTATUS DispatchIoctrl(PDEVICE_OBJECT pObject, PIRP pIrp)
 		DbgPrint(("Hello iocontrol\n"));
 		break;
 	case CTL_PRINT:
-		DbgPrint(("%ws\n", pInputBuff));
+		KdPrint(("%wZ\n", pInputBuff));
 		break;
 	case CTL_BYE:
 		DbgPrint(("Goodbye iocontrol\n"));
@@ -143,7 +143,7 @@ NTSTATUS DispatchIoctrl(PDEVICE_OBJECT pObject, PIRP pIrp)
 		DbgPrint(("Unknown iocontrol\n"));
 	}
 	pIrp->IoStatus.Status = STATUS_SUCCESS;
-	pIrp->IoStatus.Information = 0;
+	pIrp->IoStatus.Information = uInputLength;
 	IoCompleteRequest(pIrp, IO_NO_INCREMENT);
 
 	return STATUS_SUCCESS;
