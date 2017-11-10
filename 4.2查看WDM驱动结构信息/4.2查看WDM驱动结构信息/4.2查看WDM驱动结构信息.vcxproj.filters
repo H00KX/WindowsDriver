@@ -19,11 +19,6 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <Inf Include="4.2查看WDM驱动结构信息.inf">
-      <Filter>Driver Files</Filter>
-    </Inf>
-  </ItemGroup>
-  <ItemGroup>
     <ClInclude Include="HelloWDM.h">
       <Filter>Header Files</Filter>
     </ClInclude>
