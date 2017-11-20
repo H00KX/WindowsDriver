@@ -29,5 +29,3 @@ typedef struct _DEVICE_EXTENSION {
 NTSTATUS	CreateDevice(IN PDRIVER_OBJECT pDriverObject);
 VOID		HelloDDKUnload(IN PDRIVER_OBJECT pDriverObject);
 NTSTATUS	HelloDDKDispatchRoutine(IN PDEVICE_OBJECT pDevObj, IN PIRP pIrp);
-wchar_t wdevName[] = L"\\Device\\MyDDKDevice";
-wchar_t wstrSymLinkName[] = L"\\??\\HelloDDK";
