@@ -3,48 +3,46 @@
 #define SymLinkName L"\\??\\HelloDDK"
 
 #pragma LOCKEDCODE
-VOID HelloDDKStartIo(PDEVICE_OBJECT pDeviceObject, PIRP pIrp)
+VOID 
+MyStartIo(PDEVICE_OBJECT pDeviceObject, PIRP pFistIrp)
 {
+	KdPrint(("Enter MyStartIo\n"));
 	KIRQL oldirql;
-	KdPrint(("Enter HelloDDKStartIo\n"));
-
-	KIRQL currIrql = KeGetCurrentIrql();
-	//获得cancel自旋锁
 	IoAcquireCancelSpinLock(&oldirql);
-	if (pIrp != pDeviceObject->CurrentIrp || pIrp->Cancel)
+
+	KIRQL curIrp = KeGetCurrentIrql();
+	PDEVICE_EXTENSION pDevExt = (PDEVICE_EXTENSION)pDeviceObject->DeviceExtension;
+
+	PKDEVICE_QUEUE_ENTRY device_entry;
+	PIRP pIrp = pFistIrp;
+
+	do
 	{
-		//如果当前有正在处理的IRP，则简单的入队列，病直接返回
-		//入队列的工作由系统完成，在StartIo中不用负责
-		IoReleaseCancelSpinLock(oldirql);
-		KdPrint(("Leave HelloDDKStartIo\n"));
-		return;
-	}
-	else
-	{
-		//由于正在处理该IRP，所以不允许调用取消例程
-		//因此将此IRP的取消例程设置为NULL
-		IoSetCancelRoutine(pIrp, NULL);
-		IoReleaseCancelSpinLock(oldirql);
-	}
+		KEVENT event;
+		KeInitializeEvent(&event, NotificationEvent, FALSE);
 
-	/*KEVENT event;
-	KeInitializeEvent(&event, NotificationEvent, FALSE);*/
+		//等3秒
+		//LARGE_INTEGER timeout;
+		//timeout.QuadPart = -3 * 1000 * 1000 * 10;
 
-	//等待3秒
-	//LARGE_INTEGER timeout;
-	//timeout.QuadPart = -3 * 1000 * 10000;
+		//KeWaitForSingleObject(&event, Executive, KernelMode, FALSE, &timeout);
 
-	//定义一个3秒的演示，模拟IRP操作需要3秒时间
-	//KeWaitForSingleObject(&event, Executive, KernelMode, FALSE, &timeout);
+		KdPrint(("Complete a irp:%x\n", pIrp));
+		pIrp->IoStatus.Status = STATUS_SUCCESS;
+		pIrp->IoStatus.Information = 0;
+		IoCompleteRequest(pIrp, IO_NO_INCREMENT);
 
-	pIrp->IoStatus.Status = STATUS_SUCCESS;
-	pIrp->IoStatus.Information = 0;
-	IoCompleteRequest(pIrp, IO_NO_INCREMENT);
+		device_entry = KeRemoveDeviceQueue(&pDevExt->device_queue);
+		KdPrint(("device_entry:%x\n", device_entry));
+		if (device_entry == NULL)
+		{
+			break;
+		}
+		pIrp = CONTAINING_RECORD(device_entry, IRP, Tail.Overlay.DeviceQueueEntry);
+	} while (1);
+	IoReleaseCancelSpinLock(oldirql);
 
-	//在队列中读取一个IRP，并进行StartIo
-	IoStartNextPacket(pDeviceObject, TRUE);
-
-	KdPrint(("Leave HelloDDKStartIo\n"));
+	KdPrint(("Leave MyStartIo\n"));
 }
 
 extern "C" NTSTATUS DriverEntry(
@@ -52,7 +50,6 @@ extern "C" NTSTATUS DriverEntry(
 	IN PUNICODE_STRING pRegistryPath
 )
 {
-	
 	NTSTATUS status;
 	KdPrint(("Enter DriverEntry\n"));
 
@@ -61,11 +58,10 @@ extern "C" NTSTATUS DriverEntry(
 	{
 		pDriverObject->MajorFunction[i] = HelloDDKDispatchRoutine;
 	}
-	pDriverObject->MajorFunction[IRP_MJ_READ] = HelloDDKRead;
 
 	pDriverObject->DriverUnload = HelloDDKUnload;
+	pDriverObject->MajorFunction[IRP_MJ_READ] = HelloDDKRead;
 
-	pDriverObject->DriverStartIo = HelloDDKStartIo;
 
 	//创建驱动设备对象
 	status = CreateDevice(pDriverObject);
@@ -82,7 +78,7 @@ NTSTATUS CreateDevice(
 	NTSTATUS status;
 	PDEVICE_OBJECT pDevObj;
 	PDEVICE_EXTENSION pDevExt;
-	
+
 	//创建设备名称
 	UNICODE_STRING devName;
 
@@ -104,6 +100,9 @@ NTSTATUS CreateDevice(
 	pDevExt = (PDEVICE_EXTENSION)pDevObj->DeviceExtension;
 	pDevExt->pDevice = pDevObj;
 	pDevExt->ustrDeviceName = devName;
+
+	pDevExt->device_queue.DeviceListHead.Blink = pDevExt->device_queue.DeviceListHead.Flink = &pDevExt->device_queue.DeviceListHead;
+
 	//创建符号链接
 	UNICODE_STRING symLinkName;
 
@@ -141,7 +140,7 @@ NTSTATUS HelloDDKDispatchRoutine(IN PDEVICE_OBJECT pDevObj,
 	IN PIRP pIrp)
 {
 	KdPrint(("Enter HelloDDKDispatchRoutin\n"));
-	
+
 	PIO_STACK_LOCATION stack = IoGetCurrentIrpStackLocation(pIrp);
 	//建立一个字符串数组与IRP类型对应起来
 	static char* irpname[] =
@@ -195,29 +194,15 @@ NTSTATUS HelloDDKDispatchRoutine(IN PDEVICE_OBJECT pDevObj,
 	return status;
 }
 
-#pragma LOCKEDCODE
-VOID OnCancelIRP(PDEVICE_OBJECT pDeviceObject, PIRP pIrp)
+VOID 
+OnCancelIrp(PDEVICE_OBJECT pDevice, PIRP pIrp)
 {
 	KdPrint(("Enter CancelReadIrp\n"));
-	if (pIrp == pDeviceObject->CurrentIrp)
-	{
-		KIRQL oldirql = pIrp->CancelIrql;
-		//释放Cancel自旋锁
-		IoReleaseCancelSpinLock(pIrp->CancelIrql);
 
-		IoStartNextPacket(pDeviceObject, TRUE);
+	//释放Cancel自旋锁
+	IoReleaseCancelSpinLock(pIrp->CancelIrql);
 
-		KeLowerIrql(oldirql);
-	}
-	else
-	{
-		//从设备队列中将该IRP抽取出来
-		KeRemoveEntryDeviceQueue(&pDeviceObject->DeviceQueue, &pIrp->Tail.Overlay.DeviceQueueEntry);
-		//释放Cancel自旋锁
-		IoReleaseCancelSpinLock(pIrp->CancelIrql);
-	}
-
-	//设置完成状态为 STATUS_CANCELLED
+	//设置完成状态为STATUS_CANCELLED
 	pIrp->IoStatus.Status = STATUS_CANCELLED;
 	pIrp->IoStatus.Information = 0;
 	IoCompleteRequest(pIrp, IO_NO_INCREMENT);
@@ -225,19 +210,42 @@ VOID OnCancelIRP(PDEVICE_OBJECT pDeviceObject, PIRP pIrp)
 	KdPrint(("Leave CancelReadIrp\n"));
 }
 
-NTSTATUS HelloDDKRead(PDEVICE_OBJECT pDeviceObject, PIRP pIrp)
+#pragma LOCKEDCODE
+NTSTATUS HelloDDKRead(PDEVICE_OBJECT pDevObj, PIRP pIrp)
 {
-	KdPrint(("Enter HelloDDKRead\n"));
+	KdPrint(("Enter HeeloDDKRead\n"));
+	PDEVICE_EXTENSION pDevExt = (PDEVICE_EXTENSION)pDevObj->DeviceExtension;
 
-	PDEVICE_EXTENSION pDevExt = (PDEVICE_EXTENSION)pDeviceObject->DeviceExtension;
+	LIST_ENTRY list;
 
 	//将IRP设置为挂起
 	IoMarkIrpPending(pIrp);
 
-	//将IRP插入系统的队列
-	IoStartPacket(pDeviceObject, pIrp, 0, OnCancelIRP);
+	IoSetCancelRoutine(pIrp, OnCancelIrp);
+
+	KIRQL curIrp = KeGetCurrentIrql();
+	
+
+	KIRQL oldirql;
+	KeRaiseIrql(DISPATCH_LEVEL, &oldirql);
+
+	curIrp = KeGetCurrentIrql();
+
+	KdPrint(("DeviceQueueEntry:%x\n", &pIrp->Tail.Overlay.DeviceQueueEntry));
+	if (!KeInsertDeviceQueue(&pDevExt->device_queue, &pIrp->Tail.Overlay.DeviceQueueEntry))
+		MyStartIo(pDevObj, pIrp);
+
+	KeLowerIrql(oldirql);
 
 	KdPrint(("Leave HelloDDKRead\n"));
+	list;
+	//返回pending状态
+	return STATUS_PENDING;
+}
+
+NTSTATUS HelloDDKCleanup(PDEVICE_OBJECT pDevObj, PIRP pIrp)
+{
 
 	return STATUS_SUCCESS;
 }
+
