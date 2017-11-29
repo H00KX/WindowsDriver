@@ -148,8 +148,158 @@ NTSTATUS HelloDDKDispatchRoutine(PDEVICE_OBJECT pDevObj, PIRP pIrp)
 }
 
 
+VOID GetDeviceObjectInfo(PDEVICE_OBJECT DevObj)
+{
+	POBJECT_HEADER ObjectHeader;
+	POBJECT_HEADER_NAME_INFO ObjectNameInfo;
+
+	if (DevObj == NULL)
+	{
+		KdPrint(("DebObj is NULL!\n"));
+		return;
+	}
+	//得到对象头
+	ObjectHeader = OBJECT_TO_OBJECT_HEADER(DevObj);
+	if (ObjectHeader)
+	{
+		//查询设备名称并打印
+		ObjectNameInfo = OBJECT_HEADER_TO_NAME_INFO(ObjectHeader);
+
+		if (ObjectNameInfo && ObjectNameInfo->Name.Buffer)
+		{
+			KdPrint(("Driver Name:%wZ - Device Name:%wZ - Driver Address:0x%x - Device Address:0x%x\n",
+				&DevObj->DriverObject->DriverName,
+				&ObjectNameInfo->Name,
+				DevObj->DriverObject,
+				DevObj));
+		}
+		//对于没有名称的设备，则打印NULL
+		else if (DevObj->DriverObject)
+		{
+			KdPrint(("Driver Name:%wZ - Device Name:%S - Driver Address:0x%x - Device Address:0x%x\n",
+				&DevObj->DriverObject->DriverName,
+				L"NULL",
+				DevObj->DriverObject,
+				DevObj));
+		}
+	}
+
+
+}
+
+
+VOID 
+GetAttachedDeviceInfo(PDEVICE_OBJECT DevObj)
+{
+	PDEVICE_OBJECT DeviceObject;
+
+	if (DevObj == NULL)
+	{
+		KdPrint(("DevObj is NULL!\n"));
+		return;
+	}
+
+	DeviceObject = DevObj->AttachedDevice;
+
+	while (DeviceObject)
+	{
+		KdPrint(("Attached Driver Name:%wZ, Attached Driver Address:0x%x, Attached DeviceAddress:0x%x\n",
+			&DeviceObject->DriverObject->DriverName,
+			DeviceObject->DriverObject,
+			DeviceObject));
+		DeviceObject = DeviceObject->AttachedDevice;
+	}
+}
+
+PDRIVER_OBJECT
+EnumDeviceStack(PWSTR pwszDeviceName)
+{
+	UNICODE_STRING DriverName;
+	PDRIVER_OBJECT DriverObject = NULL;
+	PDEVICE_OBJECT DeviceObject = NULL;
+
+	RtlInitUnicodeString(&DriverName, pwszDeviceName);
+
+	ObReferenceObjectByName(
+		&DriverName,
+		OBJ_CASE_INSENSITIVE,
+		NULL,
+		0,
+		(POBJECT_TYPE)IoDriverObjectType,
+		KernelMode,
+		NULL,
+		(PVOID*)&DriverObject
+	);
+
+	if (DriverObject == NULL)
+	{
+		return NULL;
+	}
+
+	DeviceObject = DriverObject->DeviceObject;
+
+	while (DeviceObject)
+	{
+		GetDeviceObjectInfo(DeviceObject);
+
+		//判断当前设备上是否又过滤驱动
+		if (DeviceObject->AttachedDevice)
+		{
+			GetAttachedDeviceInfo(DeviceObject);
+		}
+
+		//进一步判断当前设备上VPB中的设备
+		if (DeviceObject->Vpb && DeviceObject->Vpb->DeviceObject)
+		{
+			GetDeviceObjectInfo(DeviceObject->Vpb->DeviceObject);
+
+			if (DeviceObject->Vpb->DeviceObject->AttachedDevice)
+			{
+				GetAttachedDeviceInfo(DeviceObject->Vpb->DeviceObject);
+			}
+		}
+		//得到建立在此驱动上的下一个设备 DEVICE_OBJECT
+		DeviceObject = DeviceObject->NextDevice;
+	}
+	return DriverObject;
+}
+
 
 NTSTATUS HelloDDKDeviceIoControl(PDEVICE_OBJECT pDevObj, PIRP pIrp)
 {
+	NTSTATUS status = STATUS_SUCCESS;
+	KdPrint(("Enter HelloDDKDeviceIoControl\n"));
 
+	//得到当前堆栈
+	PIO_STACK_LOCATION stack = IoGetCurrentIrpStackLocation(pIrp);
+	//得到输入缓冲区大小
+	ULONG cbin = stack->Parameters.DeviceIoControl.InputBufferLength;
+	ULONG cbout = stack->Parameters.DeviceIoControl.OutputBufferLength;
+	ULONG code = stack->Parameters.DeviceIoControl.IoControlCode;
+
+	ULONG info = 0;
+
+	switch (code)
+	{
+	case IOCTL_DUMP_DEVICE_STACK:
+	{
+		KdPrint(("IOCTL_DUMP_DEVICE_STACK\n"));
+		WCHAR* InputBuffer = (WCHAR*)pIrp->AssociatedIrp.SystemBuffer;
+		KdPrint(("%ws\n", InputBuffer));
+
+		EnumDeviceStack(InputBuffer);
+
+		break;
+	}
+	default:
+		status = STATUS_INVALID_VARIANT;
+	}
+
+	pIrp->IoStatus.Status = status;
+	pIrp->IoStatus.Information = info;
+	IoCompleteRequest(pIrp, IO_NO_INCREMENT);
+
+	KdPrint(("Leave HelloDDKDeviceIoControl\n"));
+
+	return status;
 }

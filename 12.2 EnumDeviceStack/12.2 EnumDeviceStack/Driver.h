@@ -122,5 +122,5 @@ typedef struct _OBJECT_HEADER_NAME_INFO
 #define OBJECT_TO_OBJECT_HEADER(o) \
 	CONTAINING_RECORD((o), OBJECT_HEADER, Body)
 
-#define OBJECT_HEADER_IO_NAME_INFO(oh) ((POBJECT_HEADER_NAME_INFO) \
+#define OBJECT_HEADER_TO_NAME_INFO(oh) ((POBJECT_HEADER_NAME_INFO) \
 	((oh)->NameInfoOffset == 0 ? NULL : ((PCHAR)(oh) - (oh)->NameInfoOffset)))
