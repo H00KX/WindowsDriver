@@ -1,14 +1,14 @@
 #pragma once
 #include "Driver.h"
 
-VOID CreateFileTest()
+VOID CreateFileTest(WCHAR *szFileName)
 {
 	OBJECT_ATTRIBUTES	objectAttributes;
 	IO_STATUS_BLOCK	iostatus;
 	HANDLE hfile;
 	UNICODE_STRING logFileUnicodeString;
 
-	RtlInitUnicodeString(&logFileUnicodeString, L"\\??\\C:\\1.log");
+	RtlInitUnicodeString(&logFileUnicodeString, szFileName);
 	//或者写成 "\\Device\\HarddiskVolume1\\1.LOG"
 
 	//初始化objectAttributes
@@ -52,7 +52,7 @@ VOID DispatchProcess()
 	PEPROCESS pEProcess = PsGetCurrentProcess();
 	//得到当前进程名称
 	PTSTR ProcessName = (PTSTR)((ULONG)pEProcess + 0x174);
-	KdPrint(("%s\n", ProcessName));
+	KdPrint(("当前进程名:%s\n", ProcessName));
 }
 
 VOID OpenFileTest1()
@@ -284,7 +284,10 @@ VOID ReadFileTest()
 VOID FileTest()
 {
 	//创建文件实验
-	CreateFileTest();
+	WCHAR		*szFileName1 = L"\\??\\C:\1.txt";
+	WCHAR		*szFileName2 = L"\\??\\C:\\2.txt";
+	CreateFileTest(szFileName1);
+	CreateFileTest(szFileName2);
 
 	//打开文件实验
 	OpenFileTest1();
